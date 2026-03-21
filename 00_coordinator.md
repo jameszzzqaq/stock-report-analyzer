@@ -32,7 +32,7 @@ output_dir   = {workspace}/{stock_code}-{company_name}/
 
 ## 2. 执行流程
 
-### Step 0：确保年报 PDF
+### Phase 0：确保年报 PDF
 
 ```text
 current_month = {当前月份}
@@ -58,7 +58,7 @@ else:
 4. If `$stock-report-downloader` is not applicable, fails, or the target is not A-share / Hong Kong, then fall back to plugins, scripts, or WebSearch to find `{company_name} {target_year} annual report PDF`.
 5. If fallback also fails, record the reason and set `pdf_path = null`.
 
-### Step 1-3：阶段调度
+### Phase 1-2：阶段调度
 
 ```text
 前置：创建输出目录 {output_dir}
@@ -81,30 +81,15 @@ Phase 2（仅当 pdf_path 有效时执行）
       输出：{output_dir}/data_pack_report.md
       若 PDF 无法解析 -> 跳过，Phase 3 使用降级方案。
 
-Phase 3（始终执行，按需加载因子模块）
-
-    ① 阅读 {strategy_dir}/03_strategy_knowledge_base.md
-    ② 阅读 {strategy_dir}/04_factor1_定性分析.md
-    ③ 阅读 {strategy_dir}/05_factor2_粗算.md
-    ④ 阅读 {strategy_dir}/06_factor3_精算.md
-    ⑤ 阅读 {strategy_dir}/07_factor4_估值.md
-    ⑥ 阅读 {strategy_dir}/08_report_template.md
-
-  输入：{output_dir}/data_pack_market.md + {output_dir}/data_pack_report.md（若存在）
-  输出：{output_dir}/{company_name}_{stock_code}_分析报告.md
-
-  若无 data_pack_report.md -> 标注"无年报PDF，降级分析"，模块九（母公司单体）不可用，MD&A 基于 WebSearch 摘要。
 ```
 
 ***
 
-## 3. Phase 3 执行步骤详解
- 收到用户输入的标的名称/代码后，严格按以下顺序jia'zai并执行（任一因子否决则停止，输出否决报告）
-    Phase 3 不调用任何外部数据源，所有数据来自数据包文件。
-  每完成一个因子 -> 立即将结论追加写入报告文件（checkpoint）。
-
-
-### Step 1: 读取数据包
+### 3. Phase 3 执行步骤详解
+  Phase 3 不调用任何外部数据源，所有数据来自数据包文件。每完成一个因子 -> 立即将结论追加写入报告文件（checkpoint）。收到用户输入的标的名称/代码后，严格按以下顺序加载并执行（任一因子否决则停止，输出否决报告）
+  
+  
+#### Step 1: 读取数据包
 
 1. **读取 `data_pack_market.md`**（必有）：
    - 确认基础信息（股票代码、上市结构、持股渠道、税率、汇率）
@@ -120,14 +105,14 @@ Phase 3（始终执行，按需加载因子模块）
    - 汇总可用数据和缺失数据
    - 若关键计算数据（净利润、OCF、Capex）缺失 → 终止分析，通知用户
 
-### Step 2: 因子1A — 五分钟快筛
+#### Step 2: 因子1A — 五分钟快筛
 → 加载 `04_factor1_定性分析.md`
 
 - 逐条判断6项检查
 - 任一项否决 → 停止全部后续分析，输出否决报告
 - 全部通过 → 输出初步画像，进入Step 3
 
-### Step 3: 因子1B — 深度定性分析
+#### Step 3: 因子1B — 深度定性分析
 → 继续使用 `04_factor1_定性分析.md`
 
 - 先执行模块〇（三大报表基础数据），建立数据基础并锚定利润口径
@@ -137,7 +122,7 @@ Phase 3（始终执行，按需加载因子模块）
 - **模块九（控股折价）触发判断**：若标的为控股公司/投资控股/多元化集团结构 → 执行模块九
 - 输出因子1B汇总
 
-### Step 4: 因子2 — 穿透回报率粗算（Top-Down）
+#### Step 4: 因子2 — 穿透回报率粗算（Top-Down）
 → 加载 `05_factor2_粗算.md`
 
 - 按步骤1-8逐步计算
@@ -146,7 +131,7 @@ Phase 3（始终执行，按需加载因子模块）
 - **粗算否决门判断**：若 R < Rf 或 R < II×0.5 → 直接否决，不进入因子3
 - 若 R 边际不达标（II×0.5 ≤ R < II）→ 标注后继续进入因子3
 
-### Step 5: 因子3 — 穿透回报率精算（Bottom-Up）+ 现金质量审计
+#### Step 5: 因子3 — 穿透回报率精算（Bottom-Up）+ 现金质量审计
 → 加载 `06_factor3_精算.md`
 
 - 按步骤1-11逐步执行
@@ -154,14 +139,14 @@ Phase 3（始终执行，按需加载因子模块）
 - 步骤11含外推可信度5维度评级
 - 与因子1交叉验证
 
-### Step 6: 因子4 — 估值与安全边际
+#### Step 6: 因子4 — 估值与安全边际
 → 加载 `07_factor4_估值.md`
 
 - 门槛比较 → 价值陷阱排查 → 安全边际与仓位 → 股价位置与买入触发价评估
 - 步骤4使用 data_pack_market §11/附录A 的10年历史周线数据
 - 输出最终判断
 
-### Step 7: 生成报告
+#### Step 7: 生成报告
 → 加载 `08_report_template.md`
 
 - 严格按照报告模板输出完整Markdown报告
@@ -169,7 +154,7 @@ Phase 3（始终执行，按需加载因子模块）
 
 ***
 
-## 4. Checkpoint 提醒
+## 3. Checkpoint 提醒
 
 完成每个因子后，**立即将该因子结论追加写入报告文件**，然后再开始下一因子。这样做的目的是：
 - 防止长上下文导致信息丢失
@@ -178,7 +163,7 @@ Phase 3（始终执行，按需加载因子模块）
 
 ***
 
-## 5. 异常处理速查
+## 4. 异常处理速查
 
 | 异常         | 处理                    |
 | :--------- | :-------------------- |
@@ -191,7 +176,7 @@ Phase 3（始终执行，按需加载因子模块）
 
 ***
 
-## 6. 文件路径与只读规则
+## 5. 文件路径与只读规则
 
 ```text
 {workspace}/
