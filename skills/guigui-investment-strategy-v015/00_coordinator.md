@@ -50,9 +50,12 @@ else:
     pdf_path = null
 ```
 
-**自动下载**：
-1. 首选：使用具备文档获取权限的插件、脚本或 WebSearch 搜索 `{company_name} {target_year} 年报 PDF 下载`，并将最新年报保存至 `{output_dir}` 供 Phase 2 读取。
-2. 失败：记录原因，`pdf_path = null`。
+**Auto-download**:
+1. If the user does not provide a valid PDF, the coordinator must proactively fetch the annual report instead of skipping directly.
+2. For A-share and Hong Kong stocks, prefer using `$stock-report-downloader` to fetch the `target_year` annual report and save the PDF into `{output_dir}`.
+3. When using `$stock-report-downloader`, reuse its existing CLI or wrapper flow instead of reimplementing the download logic; pass an explicit market hint when needed.
+4. If `$stock-report-downloader` is not applicable, fails, or the target is not A-share / Hong Kong, then fall back to plugins, scripts, or WebSearch to find `{company_name} {target_year} annual report PDF`.
+5. If fallback also fails, record the reason and set `pdf_path = null`.
 
 ### Step 1-3：阶段调度
 
