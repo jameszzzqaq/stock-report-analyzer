@@ -82,7 +82,7 @@ Phase 2（仅当 pdf_path 有效时执行）
       若 PDF 无法解析 -> 跳过，Phase 3 使用降级方案。
 
 Phase 3（始终执行，按需加载因子模块）
-  按以下顺序加载并执行（任一因子否决则停止，输出否决报告）：
+
     ① 阅读 {strategy_dir}/03_strategy_knowledge_base.md
     ② 阅读 {strategy_dir}/04_factor1_定性分析.md
     ③ 阅读 {strategy_dir}/05_factor2_粗算.md
@@ -92,16 +92,17 @@ Phase 3（始终执行，按需加载因子模块）
 
   输入：{output_dir}/data_pack_market.md + {output_dir}/data_pack_report.md（若存在）
   输出：{output_dir}/{company_name}_{stock_code}_分析报告.md
-  Phase 3 不调用任何外部数据源，所有数据来自数据包文件。
-  每完成一个因子 -> 立即将结论追加写入报告文件（checkpoint）。
+
   若无 data_pack_report.md -> 标注"无年报PDF，降级分析"，模块九（母公司单体）不可用，MD&A 基于 WebSearch 摘要。
 ```
 
 ***
 
 ## 3. Phase 3 执行步骤详解
+ 收到用户输入的标的名称/代码后，严格按以下顺序jia'zai并执行（任一因子否决则停止，输出否决报告）
+    Phase 3 不调用任何外部数据源，所有数据来自数据包文件。
+  每完成一个因子 -> 立即将结论追加写入报告文件（checkpoint）。
 
-收到用户输入的标的名称/代码后，严格按以下顺序执行：
 
 ### Step 1: 读取数据包
 
@@ -194,28 +195,13 @@ Phase 3（始终执行，按需加载因子模块）
 
 ```text
 {workspace}/
-├── 龟龟投资策略_v0.15_skills/   <- 只读，严禁写入
-└── {symbol}/                     <- 运行时输出目录
+└── {output_dir}/                     <- 运行时输出目录
     ├── data_pack_market.md
     ├── data_pack_report.md      （可选）
     └── {company_name}_{stock_code}_分析报告.md
 ```
 
 > 只读规则：策略目录（`{strategy_dir}/`）严禁修改。所有输出写入 `{output_dir}`。
-
-***
-
-## 7. 单位与币种规则（速查）
-
-> 详细换算公式见 `03_strategy_knowledge_base.md` 和各因子模块文件。
-
-| 数据源        | 单位        | 说明                 |
-| :--------- | :-------- | :----------------- |
-| Phase 1 输出 | {报表币种}百万元 | 以文件头标注为准           |
-| Phase 2 输出 | {报表原始单位}  | 千元/百万元/万元，以文件头标注为准 |
-| 最终报告       | 人民币亿元     | 换算公式见策略知识库         |
-
-禁止将百万元直接当亿元使用。禁止假设单位，必须读取文件头。
 
 ***
 
