@@ -20,6 +20,7 @@
 
 ### 第一步：运行自动化数据获取脚本
 > 📍 工具：执行本地脚本 `scripts/fetch_market_data.py`
+> If `yfinance` is missing, run `python -m pip install -r {strategy_dir}/scripts/requirements.txt` and retry.
 
 请在终端中执行以下命令生成初步数据包：
 ```bash
