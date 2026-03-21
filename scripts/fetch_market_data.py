@@ -5,12 +5,16 @@
 使用 yfinance 获取股票市场数据，输出为 data_pack_market.md 的结构化数据部分（§1-§6, §11）。
 AI 负责补充 WebSearch 部分（§7-§10 管理层/行业/子公司/MD&A）。
 
+⚠️ 注意：股票代码格式
+  - 港股：**不要加前导0**（如 3613.HK，不是 03613.HK）
+  - A股：使用 .SS（上海）或 .SZ（深圳）后缀（如 600519.SS）
+
 用法：
     python fetch_market_data.py <stock_code> [--output-dir <dir>] [--channel <channel>]
 
 示例：
     python fetch_market_data.py 0001.HK --output-dir ./0001 --channel 港股通
-    python fetch_market_data.py 6049.HK
+    python fetch_market_data.py 3613.HK
     python fetch_market_data.py 600519.SS --channel 长期持有
 """
 
@@ -542,6 +546,17 @@ def main():
     args = parser.parse_args()
     
     code = args.stock_code
+    
+    # 自动修正带前导0的港股代码（如 03613.HK -> 3613.HK）
+    if "." in code and code.split(".")[1].upper() == "HK":
+        prefix = code.split(".")[0]
+        if prefix.startswith("0") and len(prefix) > 1:
+            new_prefix = prefix.lstrip("0")
+            if new_prefix:
+                original_code = code
+                code = f"{new_prefix}.{code.split('.')[1]}"
+                print(f"⚠️  检测到带前导0的港股代码，已自动修正：{original_code} -> {code}", file=sys.stderr)
+    
     symbol = code.split(".")[0] if "." in code else code
     output_dir = args.output_dir or f"./{symbol}/"
     channel = args.channel or get_default_channel(code)
