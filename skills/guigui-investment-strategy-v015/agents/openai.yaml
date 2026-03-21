@@ -1,4 +1,0 @@
-interface:
-  display_name: "龟龟投资策略 v0.15"
-  short_description: "按龟龟投资策略 v0.15 原始多阶段 workflow 执行选股分析"
-  default_prompt: "Use $guigui-investment-strategy-v015 按龟龟投资策略 v0.15 的原始 coordinator 与 phase workflow 完成分析并输出标准报告。"
