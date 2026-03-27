@@ -33,6 +33,11 @@ python {strategy_dir}/scripts/fetch_market_data.py {stock_code} --output-dir {ou
 
 请认真查阅刚生成的 `data_pack_market.md` 文件。下方罗列了完整的**"要采集的数据清单"**，请核对脚本生成的数据，并使用 WebSearch 补充所有标记为 `{待WebSearch确认}`、`{待AI补充}` 或 `⚠️缺失` 的空缺项。直接在 Markdown 文件中更新并保存。
 
+**职责边界**：
+- Phase 1 负责：市场行情、历史价格、三大表骨架，以及通过 WebSearch 补基础信息/汇率/Rf/治理摘要/子公司当前市值等外部信息。
+- Phase 1 不负责强行通过 WebSearch 回填附注级财报字段。若缺失项本质上来自年报附注或母公司单体报表，应明确标注 `待 Phase 2 补`。
+- 对于 `yfinance` 缺失的财报字段，不要为了“填满表格”而使用二手媒体口径替代正式年报口径。
+
 ---
 
 ## 具体要采集的数据内容（核对与补充清单）
@@ -67,6 +72,11 @@ python {strategy_dir}/scripts/fetch_market_data.py {stock_code} --output-dir {ou
 
 > ⚠️ 这部分绝大多数已由脚本通过 `yfinance` 自动排列完成。你需要核对以下核心科目是否存在。若脚本标记 `⚠️缺失`，请尝试通过 WebSearch 补充。金额单位必须是**{报表币种}百万**。
 
+若以下字段缺失，优先按类别处理：
+- 可由公开市场/监管信息补充：上市结构、汇率、Rf、回购计划/授权
+- 应移交 Phase 2：合同负债/递延收入、母公司单体现金及负债、受限现金、股息总额附注、资本化利息、或有负债与承诺
+- 若既非公开市场可稳定补充、又不属于年报附注的零散字段，则保留 `⚠️缺失`
+
 **核心监控科目（用于后续分析）：**
 - 归母净利润（Net Income Applicable To Common Shares）
 - 折旧摊销（Depreciation & Amortization）
@@ -79,6 +89,7 @@ python {strategy_dir}/scripts/fetch_market_data.py {stock_code} --output-dir {ou
 
 - **股息记录**：脚本已获取列表。请通过 WebSearch 检查是否遗漏，并重点**补充**每笔股息的**类型**（中期/末期/特别）。
 - **回购记录**：脚本已从现金流量表提取。如果某年份缺失，务必通过 WebSearch 确认其实际回购金额并补充。
+- **股息总额/支付率**：不在 Phase 1 通过媒体或二手口径估算，优先交由 Phase 2 从年报附注提取同币种金额。
 
 ### §7. 管理层与治理信息
 > 📍 全部通过 WebSearch 补充
@@ -274,7 +285,8 @@ python {strategy_dir}/scripts/fetch_market_data.py {stock_code} --output-dir {ou
 在完成 `data_pack_market.md` 内容补充后：
 1. 检查所有的 `{待AI补充}` 或 `⚠️缺失`标记是否已尽量修补。如果不适用或搜不到，标明“无法获取”。
 2. 修改文件顶部的数据完整度声明 `数据完整性：{待AI补充WebSearch部分后确认}`，明确说明缺失的模块。
-3. 确保最终排版与上一节要求的**输出格式模板**完全一致。
+3. 对所有标注 `待 Phase 2 补` 的字段保留该标记，不要在 Phase 1 用非正式口径硬填。
+4. 确保最终排版与上一节要求的**输出格式模板**完全一致。
 
 ---
 
