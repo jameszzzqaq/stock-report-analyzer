@@ -1,7 +1,7 @@
 # 龟龟投资策略 v0.15 — 协调器（Coordinator）
 
 > 本文件为多阶段分析的调度中枢。协调器自身不执行数据获取或分析计算，仅负责：
-> 解析用户输入 -> 确保年报 PDF -> 调度 Phase 1/2/3 -> 交付最终报告。
+> 解析用户输入 -> 确保年报 PDF -> 调度 Phase 1/2/2.5/3 -> 交付最终报告。
 
 ***
 
@@ -62,7 +62,7 @@ else:
 4. If `$financial-report-downloader` is not applicable, fails, or the target is not A-share / Hong Kong, then fall back to plugins, scripts, or WebSearch to find `{company_name} {target_year} annual report PDF`.
 5. If fallback also fails, record the reason and set `pdf_path = null`.
 
-### Phase 1-2：阶段调度
+### Phase 1-2.5：阶段调度
 
 ```text
 前置：创建输出目录 {output_dir}
@@ -85,6 +85,12 @@ Phase 2（仅当 pdf_path 有效时执行）
       输出：{output_dir}/data_pack_report.md
       若 PDF 无法解析 -> 跳过，Phase 3 使用降级方案。
 
+Phase 2.5（始终执行）
+  阅读 {strategy_dir}/02_5_analysis_input_summary.md 并执行。
+  输入：{output_dir}/data_pack_market.md, {output_dir}/data_pack_report.md（若存在）
+  输出：{output_dir}/analysis_input_summary.md
+  作用：统一 market/report 两份数据包的口径，供 Phase 3 默认读取。
+
 ```
 
 ***
@@ -95,17 +101,21 @@ Phase 2（仅当 pdf_path 有效时执行）
   
 #### Step 1: 读取数据包
 
-1. **读取 `data_pack_market.md`**（必有）：
+1. **优先读取 `analysis_input_summary.md`**（标准入口）：
+   - 若存在，优先使用其中的字段状态、参数锚定值和降级声明
+   - 若不存在，标注「⚠️ 未生成分析输入摘要，回退旧路径直接读取数据包」
+
+2. **读取 `data_pack_market.md`**（必有）：
    - 确认基础信息（股票代码、上市结构、持股渠道、税率、汇率）
    - 确认5年三大报表数据完整性
    - 确认10年历史价格数据可用性
    - 若任何关键数据标注 `⚠️缺失`，记录缺失项清单
 
-2. **读取 `data_pack_report.md`**（可选）：
+3. **读取 `data_pack_report.md`**（可选）：
    - 若文件不存在 → 标注「无年报PDF数据包」，后续使用降级方案
    - 若存在 → 确认母公司单体报表、MD&A原文等关键项是否提取成功
 
-3. **数据完整性评估**：
+4. **数据完整性评估**：
    - 汇总可用数据和缺失数据
    - 按下方 A/B/C 三类字段执行入口检查
 

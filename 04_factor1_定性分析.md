@@ -2,7 +2,7 @@
 
 > 龟龟投资策略 v0.15 — Phase 3 因子1
 >
-> **前置依赖**：需已阅读 `03_strategy_knowledge_base.md` 并已读取数据包文件。
+> **前置依赖**：需已阅读全局策略知识库，并优先读取 `analysis_input_summary.md`。若摘要不存在，再回退读取 `data_pack_market.md` / `data_pack_report.md`。
 
 ---
 
@@ -39,7 +39,9 @@
 > 本模块在深度定性分析前，系统性列出过去5年三大报表核心数据及关键财务比率。
 > 目的：(1) 为后续八个模块提供统一数据基础；(2) 提前识别财务数据中的重大异常；(3) 锚定后续因子2/3应使用的利润口径；**(4) 预提取因子2/3/4计算所需的全部关键参数，确保后续计算数据一致、可溯源**。
 
-**指令**：从 `data_pack_market.md` §3-5 读取最近5年财务报表数据，结合 `data_pack_report.md`（若有）补充附注信息，按以下结构输出。**每项数据标注数据包来源**（如 `data_pack_market §3` 或 `data_pack_report P3`）。
+**指令**：优先从 `analysis_input_summary.md` 读取已裁决的字段、状态和参数锚定结果；若摘要不存在，再从 `data_pack_market.md` §3-5 读取最近5年财务报表数据，并结合 `data_pack_report.md`（若有）补充附注信息，按以下结构输出。**每项数据标注数据包来源**（如 `analysis_input_summary §5`、`data_pack_market §3` 或 `data_pack_report P3`）。
+
+> **兼容规则**：若 `analysis_input_summary.md` 已存在，则本模块不再重新决定 `market/report` 的优先级，只在摘要缺失字段时回源原始数据包。
 
 **(1) 利润表核心数据**（逐年列表）
 
