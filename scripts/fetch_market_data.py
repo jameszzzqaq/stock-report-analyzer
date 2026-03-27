@@ -133,6 +133,15 @@ def fmt_percent(val):
         return "⚠️缺失"
 
 
+def is_missing_value(val):
+    """Return True when a statement cell is effectively missing."""
+    try:
+        import math
+        return val is None or (isinstance(val, float) and math.isnan(val))
+    except TypeError:
+        return val is None
+
+
 def fetch_data(code: str, channel: str, output_dir: str):
     """Main data fetching and markdown generation."""
     
@@ -249,7 +258,42 @@ def fetch_data(code: str, channel: str, output_dir: str):
                 continue
         return None
 
-    def write_financial_table(title, section_num, df, fields, abs_fields=None):
+    def resolve_balance_sheet_value(field_cn, df, col):
+        """Decompose combined cash fields to avoid counting cash and short-term investments twice."""
+        cash_aliases = ("Cash And Cash Equivalents",)
+        short_aliases = (
+            "Short Term Investments",
+            "Other Short Term Investments",
+            "Available For Sale Securities",
+            "Held To Maturity Securities",
+        )
+        combined_alias = "Cash Cash Equivalents And Short Term Investments"
+
+        if field_cn not in {"现金及等价物", "短期投资"}:
+            return None
+
+        cash_val = get_field_value(df, cash_aliases, col)
+        short_val = get_field_value(df, short_aliases, col)
+        combined_val = get_field_value(df, combined_alias, col)
+
+        if field_cn == "现金及等价物":
+            if not is_missing_value(cash_val):
+                return cash_val
+            if not is_missing_value(combined_val) and not is_missing_value(short_val):
+                derived = combined_val - short_val
+                return max(derived, 0)
+            if not is_missing_value(combined_val):
+                return combined_val
+            return None
+
+        if not is_missing_value(short_val):
+            return short_val
+        if not is_missing_value(combined_val) and not is_missing_value(cash_val):
+            derived = combined_val - cash_val
+            return max(derived, 0)
+        return None
+
+    def write_financial_table(title, section_num, df, fields, abs_fields=None, custom_resolver=None, footnote_extra=None):
         """Write a financial statement table."""
         abs_fields = abs_fields or set()
         w(f"## §{section_num}. {title}")
@@ -280,7 +324,11 @@ def fetch_data(code: str, channel: str, output_dir: str):
             alias_list = field_aliases if isinstance(field_aliases, (list, tuple)) else [field_aliases]
             vals = []
             for col, _ in years:
-                val = get_field_value(df, alias_list, col)
+                val = custom_resolver(field_cn, df, col) if custom_resolver else None
+                if custom_resolver and is_missing_value(val):
+                    val = get_field_value(df, alias_list, col)
+                elif custom_resolver is None:
+                    val = get_field_value(df, alias_list, col)
                 use_abs = any(alias in abs_fields for alias in alias_list)
                 vals.append(fmt_num(val, abs_val=use_abs))
             
@@ -289,6 +337,8 @@ def fetch_data(code: str, channel: str, output_dir: str):
         
         w()
         w(f"> **说明：** 所有金额单位为{currency}百万元。yfinance 原始输出为{currency}元，已除以 1,000,000 换算为百万。")
+        if footnote_extra:
+            w(f"> **补充：** {footnote_extra}")
         w()
         w("---")
         w()
@@ -336,7 +386,14 @@ def fetch_data(code: str, channel: str, output_dir: str):
         (("Minority Interest", "Minority Interests"), "少数股东权益"),
     ]
     
-    write_financial_table("五年资产负债表", 4, balance_sheet, bs_fields)
+    write_financial_table(
+        "五年资产负债表",
+        4,
+        balance_sheet,
+        bs_fields,
+        custom_resolver=resolve_balance_sheet_value,
+        footnote_extra="若 yfinance 仅提供“现金及等价物+短期投资”合并口径，脚本会优先按已披露的短期投资或现金字段拆分，避免后续狭义现金重复计入。",
+    )
     
     # Cash Flow fields
     cf_fields = [
