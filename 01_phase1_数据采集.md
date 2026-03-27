@@ -11,7 +11,7 @@
 | 参数 | 来源 |
 |:-----|:-----|
 | `stock_code` | 协调器提供 |
-| `channel` | 协调器提供（默认：港股→港股通，A股→长期持有，美股→W-8BEN） |
+| `channel` | 协调器提供（默认：港股→港股通，A股→长期持有） |
 | `output_dir` | 协调器提供 |
 
 ---
@@ -61,7 +61,7 @@ python {strategy_dir}/scripts/fetch_market_data.py {stock_code} --output-dir {ou
 | 总股本 | 脚本自动填写 | |
 | 股息率(TTM) | 脚本自动填写 | |
 | 52周高/低 | 脚本自动填写 | |
-| Rf（十年期国债）| **WebSearch** | 港股/A股："中国十年期国债收益率"；美股："US 10 year Treasury yield" |
+| Rf（十年期国债）| **WebSearch** | 港股/A股："中国十年期国债收益率" |
 
 ### §3 ~ §5. 五年财务报表（损益表、资产负债表、现金流量表）
 
@@ -147,11 +147,11 @@ python {strategy_dir}/scripts/fetch_market_data.py {stock_code} --output-dir {ou
 | 股票代码 | {代码} |
 | 公司名称 | {名称} |
 | 上市地 | {交易所} |
-| 上市结构 | {H股/红筹/开曼/A股/美股} |
-| 持股渠道 | {直接/港股通/美股券商} |
+| 上市结构 | {H股/红筹/开曼/A股} |
+| 持股渠道 | {直接持有/港股通/长期持有} |
 | 适用股息税率 Q | {值}% |
-| 报表币种 | {HKD/RMB/USD} |
-| 价格币种 | {HKD/RMB/USD} |
+| 报表币种 | {HKD/RMB} |
+| 价格币种 | {HKD/RMB} |
 | 汇率（若需换算） | {值}（{日期}） |
 | 行业分类 | {行业} |
 | 是否控股公司 | {是/否} |
@@ -286,7 +286,6 @@ python {strategy_dir}/scripts/fetch_market_data.py {stock_code} --output-dir {ou
 | 港股H股 | 港股通 | 20% | 80% |
 | 港股红筹/开曼 | 任一 | 20% | 80% |
 | A股 | 长期持有(>1年) | 0% | 100% |
-| 美股 | W-8BEN | 10% | 90% |
 
 ---
 

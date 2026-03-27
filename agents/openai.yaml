@@ -1,4 +1,4 @@
-﻿interface:
+interface:
   display_name: "龟龟投资策略 v0.15"
   short_description: "按四因子框架执行多阶段价值投资分析"
   default_prompt: "Use $guigui-investment-strategy-v015 按协调器与分阶段模块完成个股分析并输出标准报告。"

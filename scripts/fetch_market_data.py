@@ -6,7 +6,7 @@
 AI 负责补充 WebSearch 部分（§7-§10 管理层/行业/子公司/MD&A）。
 
 ⚠️ 注意：股票代码格式
-  - 港股：**不要加前导0**（如 3613.HK，不是 03613.HK）
+  - 港股：使用 Yahoo Finance 标准代码（通常保留交易所要求的补零位数，如 0001.HK）
   - A股：使用 .SS（上海）或 .SZ（深圳）后缀（如 600519.SS）
 
 用法：
@@ -44,15 +44,12 @@ TAX_TABLE = {
     ("A股", "长期持有"): (0, 100),
     ("A股", "持有1月-1年"): (10, 90),
     ("A股", "持有不足1月"): (20, 80),
-    ("美股", "W-8BEN"): (10, 90),
-    ("美股", "直接持有"): (30, 70),
 }
 
 DEFAULT_CHANNELS = {
     "HK": "港股通",
     "SS": "长期持有",
     "SZ": "长期持有",
-    "": "W-8BEN",  # US stocks
 }
 
 
@@ -66,6 +63,17 @@ def get_exchange_suffix(code: str) -> str:
 def get_default_channel(code: str) -> str:
     suffix = get_exchange_suffix(code)
     return DEFAULT_CHANNELS.get(suffix, "直接持有")
+
+
+def validate_supported_code(code: str) -> None:
+    """Reject unsupported markets early so the skill scope matches real capability."""
+    suffix = get_exchange_suffix(code).upper()
+    if suffix not in {"HK", "SS", "SZ"}:
+        print(
+            "ERROR: 当前脚本仅支持港股和A股代码。港股请使用 .HK，A股请使用 .SS 或 .SZ 后缀。",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
 
 def safe_get(data, key, default="⚠️缺失"):
@@ -107,6 +115,20 @@ def fmt_num_raw(val):
         if val is None or (isinstance(val, float) and math.isnan(val)):
             return "⚠️缺失"
         return f"{val:,.4f}" if abs(val) < 1 else f"{val:,.2f}"
+    except (TypeError, ValueError):
+        return "⚠️缺失"
+
+
+def fmt_percent(val):
+    """Format a percentage, tolerating providers that return either 0.038 or 3.8."""
+    if isinstance(val, str):
+        return val
+    try:
+        import math
+        if val is None or (isinstance(val, float) and math.isnan(val)):
+            return "⚠️缺失"
+        pct = val * 100 if abs(val) <= 1 else val
+        return f"{pct:.2f}%"
     except (TypeError, ValueError):
         return "⚠️缺失"
 
@@ -179,7 +201,7 @@ def fetch_data(code: str, channel: str, output_dir: str):
     w(f"| 股票代码 | {code} |")
     w(f"| 公司名称 | {company_name} |")
     w(f"| 上市地 | {exchange} |")
-    w(f"| 上市结构 | {{待WebSearch确认：H股/红筹/开曼/A股/美股}} |")
+    w(f"| 上市结构 | {{待WebSearch确认：H股/红筹/开曼/A股}} |")
     w(f"| 持股渠道 | {channel} |")
     w(f"| 适用股息税率 Q | {{待确认上市结构后填写}}% |")
     w(f"| 报表币种 | {currency} |")
@@ -198,16 +220,16 @@ def fetch_data(code: str, channel: str, output_dir: str):
     w("|:-----|:-----|")
     w(f"| 当前股价 | {fmt_num_raw(current_price)} {price_currency}（截至 {now.strftime('%Y-%m-%d')}） |")
     if market_cap:
-        mc_billions = market_cap / 1_000_000_000
-        w(f"| 总市值 | {mc_billions:,.2f} 亿{price_currency}（{market_cap / 1_000_000:,.2f} 百万{price_currency}） |")
+        mc_yi = market_cap / 100_000_000
+        w(f"| 总市值 | {mc_yi:,.2f} 亿{price_currency}（{market_cap / 1_000_000:,.2f} 百万{price_currency}） |")
     else:
         w("| 总市值 | ⚠️缺失 |")
     if shares_outstanding:
         w(f"| 总股本 | {shares_outstanding:,.0f} 股 |")
     else:
         w("| 总股本 | ⚠️缺失 |")
-    if dividend_yield:
-        w(f"| 股息率(TTM) | {dividend_yield * 100:.2f}% |")
+    if dividend_yield is not None:
+        w(f"| 股息率(TTM) | {fmt_percent(dividend_yield)} |")
     else:
         w("| 股息率(TTM) | ⚠️缺失 |")
     w(f"| 52周高/低 | {fmt_num_raw(fifty_two_high)} / {fmt_num_raw(fifty_two_low)} |")
@@ -217,6 +239,16 @@ def fetch_data(code: str, channel: str, output_dir: str):
     w()
     
     # ── §3-§5. Financial Statements ──
+    def get_field_value(df, aliases, col):
+        """Return the first matching row value for a logical field."""
+        alias_list = aliases if isinstance(aliases, (list, tuple)) else [aliases]
+        for alias in alias_list:
+            try:
+                return df.loc[alias, col]
+            except (KeyError, TypeError):
+                continue
+        return None
+
     def write_financial_table(title, section_num, df, fields, abs_fields=None):
         """Write a financial statement table."""
         abs_fields = abs_fields or set()
@@ -244,21 +276,12 @@ def fetch_data(code: str, channel: str, output_dir: str):
         w(f"| 科目（单位：{currency}百万） | {year_headers} |")
         w("|:-----|" + "------:|" * len(years))
         
-        for field_key, field_cn in fields:
+        for field_aliases, field_cn in fields:
+            alias_list = field_aliases if isinstance(field_aliases, (list, tuple)) else [field_aliases]
             vals = []
             for col, _ in years:
-                raw = safe_get(df, col)
-                if isinstance(raw, dict) or hasattr(raw, '__getitem__'):
-                    val = safe_get(raw, field_key) if isinstance(raw, dict) else None
-                else:
-                    val = None
-                # Try to get from the full dataframe
-                try:
-                    val = df.loc[field_key, col]
-                except (KeyError, TypeError):
-                    val = None
-                
-                use_abs = field_key in abs_fields
+                val = get_field_value(df, alias_list, col)
+                use_abs = any(alias in abs_fields for alias in alias_list)
                 vals.append(fmt_num(val, abs_val=use_abs))
             
             val_str = " | ".join(vals)
@@ -272,146 +295,68 @@ def fetch_data(code: str, channel: str, output_dir: str):
     
     # Income Statement fields
     income_fields = [
-        ("Total Revenue", "营业收入"),
+        (("Total Revenue", "Operating Revenue"), "营业收入"),
         ("Cost Of Revenue", "营业成本"),
         ("Gross Profit", "毛利润"),
-        ("Research Development", "研发费用"),
-        ("Selling General Administrative", "销售及管理费用"),
+        (("Research Development", "Research And Development"), "研发费用"),
+        (("Selling General Administrative", "Selling General And Administration"), "销售及管理费用"),
         ("Operating Income", "经营利润"),
-        ("Other Income Expense Net", "其他收入/支出净额"),
-        ("Income Before Tax", "税前利润"),
-        ("Income Tax Expense", "所得税"),
+        (("Other Income Expense Net", "Other Non Operating Income Expenses"), "其他收入/支出净额"),
+        (("Income Before Tax", "Pretax Income"), "税前利润"),
+        (("Income Tax Expense", "Tax Provision"), "所得税"),
         ("Net Income", "集团净利润"),
-        ("Net Income Applicable To Common Shares", "归母净利润"),
-        ("Minority Interest", "少数股东损益"),
-        ("Depreciation", "折旧摊销"),
+        (("Net Income Applicable To Common Shares", "Net Income Common Stockholders", "Diluted NI Availto Com Stockholders"), "归母净利润"),
+        (("Minority Interest", "Minority Interests"), "少数股东损益"),
+        (("Depreciation", "Reconciled Depreciation", "Depreciation And Amortization In Income Statement"), "折旧摊销"),
         ("Stock Based Compensation", "SBC（股权激励）"),
     ]
     
-    # Also try alternative field names
-    alt_income_fields = [
-        ("Total Revenue", "营业收入"),
-        ("Cost Of Revenue", "营业成本"),
-        ("Gross Profit", "毛利润"),
-        ("Research And Development", "研发费用"),
-        ("Selling General And Administration", "销售及管理费用"),
-        ("Operating Income", "经营利润"),
-        ("Other Non Operating Income Expenses", "其他收入/支出净额"),
-        ("Pretax Income", "税前利润"),
-        ("Tax Provision", "所得税"),
-        ("Net Income", "集团净利润"),
-        ("Net Income Common Stockholders", "归母净利润"),
-        ("Minority Interests", "少数股东损益"),
-        ("Reconciled Depreciation", "折旧摊销"),
-        ("Stock Based Compensation", "SBC（股权激励）"),
-    ]
-    
-    # Try both field name sets
-    if income_stmt is not None and not income_stmt.empty:
-        available_idx = set(income_stmt.index)
-        primary_match = sum(1 for k, _ in income_fields if k in available_idx)
-        alt_match = sum(1 for k, _ in alt_income_fields if k in available_idx)
-        use_income_fields = alt_income_fields if alt_match > primary_match else income_fields
-    else:
-        use_income_fields = income_fields
-    
-    write_financial_table("五年损益表", 3, income_stmt, use_income_fields)
+    write_financial_table("五年损益表", 3, income_stmt, income_fields)
     
     # Balance Sheet fields
     bs_fields = [
-        ("Cash And Cash Equivalents", "现金及等价物"),
-        ("Short Term Investments", "短期投资"),
-        ("Net Receivables", "应收账款净额"),
+        (("Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"), "现金及等价物"),
+        (("Short Term Investments", "Other Short Term Investments", "Available For Sale Securities", "Held To Maturity Securities"), "短期投资"),
+        (("Net Receivables", "Receivables", "Accounts Receivable", "Gross Accounts Receivable"), "应收账款净额"),
         ("Inventory", "存货"),
-        ("Other Current Assets", "其他流动资产"),
-        ("Total Current Assets", "流动资产合计"),
-        ("Long Term Investments", "长期投资"),
-        ("Property Plant Equipment", "固定资产净额"),
+        (("Other Current Assets", "Prepaid Assets"), "其他流动资产"),
+        (("Total Current Assets", "Current Assets"), "流动资产合计"),
+        (("Long Term Investments", "Long Term Equity Investment", "Investmentsin Joint Venturesat Cost", "Investmentsin Associatesat Cost"), "长期投资"),
+        (("Property Plant Equipment", "Net PPE"), "固定资产净额"),
         ("Goodwill", "商誉"),
-        ("Intangible Assets", "无形资产"),
+        (("Intangible Assets", "Other Intangible Assets"), "无形资产"),
         ("Total Assets", "总资产"),
-        ("Short Long Term Debt", "短期有息负债"),
-        ("Long Term Debt", "长期有息负债"),
+        (("Short Long Term Debt", "Current Debt", "Current Debt And Capital Lease Obligation"), "短期有息负债"),
+        (("Long Term Debt", "Long Term Debt And Capital Lease Obligation"), "长期有息负债"),
         ("Accounts Payable", "应付账款"),
-        ("Deferred Revenue", "递延收入/合同负债 ⭐"),
-        ("Total Current Liabilities", "流动负债合计"),
-        ("Total Liab", "总负债"),
-        ("Total Stockholder Equity", "股东权益"),
-        ("Minority Interest", "少数股东权益"),
+        (("Deferred Revenue", "Current Deferred Revenue", "Non Current Deferred Revenue"), "递延收入/合同负债 ⭐"),
+        (("Total Current Liabilities", "Current Liabilities"), "流动负债合计"),
+        (("Total Liab", "Total Liabilities Net Minority Interest"), "总负债"),
+        (("Total Stockholder Equity", "Stockholders Equity", "Common Stock Equity"), "股东权益"),
+        (("Minority Interest", "Minority Interests"), "少数股东权益"),
     ]
     
-    alt_bs_fields = [
-        ("Cash And Cash Equivalents", "现金及等价物"),
-        ("Other Short Term Investments", "短期投资"),
-        ("Receivables", "应收账款净额"),
-        ("Inventory", "存货"),
-        ("Other Current Assets", "其他流动资产"),
-        ("Current Assets", "流动资产合计"),
-        ("Long Term Equity Investment", "长期投资"),
-        ("Net PPE", "固定资产净额"),
-        ("Goodwill", "商誉"),
-        ("Other Intangible Assets", "无形资产"),
-        ("Total Assets", "总资产"),
-        ("Current Debt", "短期有息负债"),
-        ("Long Term Debt", "长期有息负债"),
-        ("Accounts Payable", "应付账款"),
-        ("Current Deferred Revenue", "递延收入/合同负债 ⭐"),
-        ("Current Liabilities", "流动负债合计"),
-        ("Total Liabilities Net Minority Interest", "总负债"),
-        ("Stockholders Equity", "股东权益"),
-        ("Minority Interest", "少数股东权益"),
-    ]
-    
-    if balance_sheet is not None and not balance_sheet.empty:
-        available_idx = set(balance_sheet.index)
-        primary_match = sum(1 for k, _ in bs_fields if k in available_idx)
-        alt_match = sum(1 for k, _ in alt_bs_fields if k in available_idx)
-        use_bs_fields = alt_bs_fields if alt_match > primary_match else bs_fields
-    else:
-        use_bs_fields = bs_fields
-    
-    write_financial_table("五年资产负债表", 4, balance_sheet, use_bs_fields)
+    write_financial_table("五年资产负债表", 4, balance_sheet, bs_fields)
     
     # Cash Flow fields
     cf_fields = [
-        ("Total Cash From Operating Activities", "经营活动现金流"),
-        ("Capital Expenditures", "资本支出"),
-        ("Total Cash From Investing Activities", "投资活动现金流"),
-        ("Total Cash From Financing Activities", "融资活动现金流"),
-        ("Dividends Paid", "股息支付"),
-        ("Repurchase Of Stock", "股份回购"),
-        ("Depreciation", "折旧摊销"),
+        (("Total Cash From Operating Activities", "Operating Cash Flow"), "经营活动现金流"),
+        (("Capital Expenditures", "Capital Expenditure", "Purchase Of PPE"), "资本支出"),
+        (("Total Cash From Investing Activities", "Investing Cash Flow"), "投资活动现金流"),
+        (("Total Cash From Financing Activities", "Financing Cash Flow"), "融资活动现金流"),
+        (("Dividends Paid", "Cash Dividends Paid", "Common Stock Dividend Paid"), "股息支付"),
+        (("Repurchase Of Stock", "Repurchase Of Capital Stock"), "股份回购"),
+        (("Depreciation", "Depreciation And Amortization"), "折旧摊销"),
         ("Change In Receivables", "应收账款变动"),
-        ("Change In Payables", "应付账款变动"),
-        ("Change In Inventory", "存货变动"),
-    ]
-    
-    alt_cf_fields = [
-        ("Operating Cash Flow", "经营活动现金流"),
-        ("Capital Expenditure", "资本支出"),
-        ("Investing Cash Flow", "投资活动现金流"),
-        ("Financing Cash Flow", "融资活动现金流"),
-        ("Cash Dividends Paid", "股息支付"),
-        ("Repurchase Of Capital Stock", "股份回购"),
-        ("Depreciation And Amortization", "折旧摊销"),
-        ("Change In Receivables", "应收账款变动"),
-        ("Change In Payables And Accrued Expense", "应付账款变动"),
+        (("Change In Payables", "Change In Payable", "Change In Payables And Accrued Expense"), "应付账款变动"),
         ("Change In Inventory", "存货变动"),
     ]
     
     cf_abs_fields = {"Capital Expenditures", "Capital Expenditure", 
-                     "Dividends Paid", "Cash Dividends Paid",
+                     "Purchase Of PPE", "Dividends Paid", "Cash Dividends Paid", "Common Stock Dividend Paid",
                      "Repurchase Of Stock", "Repurchase Of Capital Stock"}
     
-    if cashflow is not None and not cashflow.empty:
-        available_idx = set(cashflow.index)
-        primary_match = sum(1 for k, _ in cf_fields if k in available_idx)
-        alt_match = sum(1 for k, _ in alt_cf_fields if k in available_idx)
-        use_cf_fields = alt_cf_fields if alt_match > primary_match else cf_fields
-    else:
-        use_cf_fields = cf_fields
-    
-    write_financial_table("五年现金流量表", 5, cashflow, use_cf_fields, abs_fields=cf_abs_fields)
+    write_financial_table("五年现金流量表", 5, cashflow, cf_fields, abs_fields=cf_abs_fields)
     
     # ── §6. 股息历史 ──
     w("## §6. 股息历史")
@@ -546,16 +491,7 @@ def main():
     args = parser.parse_args()
     
     code = args.stock_code
-    
-    # 自动修正带前导0的港股代码（如 03613.HK -> 3613.HK）
-    if "." in code and code.split(".")[1].upper() == "HK":
-        prefix = code.split(".")[0]
-        if prefix.startswith("0") and len(prefix) > 1:
-            new_prefix = prefix.lstrip("0")
-            if new_prefix:
-                original_code = code
-                code = f"{new_prefix}.{code.split('.')[1]}"
-                print(f"⚠️  检测到带前导0的港股代码，已自动修正：{original_code} -> {code}", file=sys.stderr)
+    validate_supported_code(code)
     
     symbol = code.split(".")[0] if "." in code else code
     output_dir = args.output_dir or f"./{symbol}/"

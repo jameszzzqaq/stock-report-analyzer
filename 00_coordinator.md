@@ -11,24 +11,24 @@
 
 | 输入项         | 示例                    | 必需？ | 默认值                         |
 | ----------- | --------------------- | :-: | --------------------------- |
-| 股票代码/Ticker | `0001.HK` / `AAPL`    |  ✅  | 若用户只提供名称，需先确认标准代码           |
-| 公司名称        | `长和` / `苹果`           |  -  | 用户明确输入，或由代码推断               |
-| 持股渠道        | `港股通` / `直接` / `美股券商` |  -  | 港股->港股通；A股->长期持有；美股->W-8BEN |
+| 股票代码/Ticker | `0001.HK` / `600519.SS` |  ✅  | 若用户只提供名称，需先确认标准代码         |
+| 公司名称        | `长和` / `贵州茅台`          |  -  | 用户明确输入，或由代码推断             |
+| 持股渠道        | `港股通` / `直接持有` / `长期持有` |  -  | 港股->港股通；A股->长期持有       |
 | PDF 年报文件    | 用户上传的 `.pdf` 附件       |  -  | 协调器自动下载                     |
 
 **注意事项：股票代码格式**
-- 港股：**不要加前导0**（如 3613.HK，不是 03613.HK）
+- 港股：使用 Yahoo Finance 标准代码，通常需保留补零位数（如 `0001.HK`、`3613.HK`）
 - A股：使用 .SS（上海）或 .SZ（深圳）后缀（如 600519.SS）
 
 **解析后绑定**：
 
 ```text
-stock_code   = {目标公司的标准计算代码，如 0001.HK, 600519.SS, AAPL}
+stock_code   = {目标公司的标准计算代码，如 0001.HK, 600519.SS}
 company_name = {公司中文或常用官方名称}
 channel      = {用户指定 | 按上表默认值}
 workspace    = {当前工作目录}
 strategy_dir = {SKILL.md 所在目录}
-symbol       = {stock_code 去掉交易所后缀后的目录名，如 0001, 600519, AAPL}
+symbol       = {stock_code 去掉交易所后缀后的目录名，如 0001, 600519}
 output_dir   = {workspace}/{stock_code}-{company_name}/
 ```
 
@@ -57,9 +57,9 @@ else:
 **Auto-download**:
 
 1. If the user does not provide a valid PDF, the coordinator must proactively fetch the annual report instead of skipping directly.
-2. For A-share and Hong Kong stocks, prefer using `$stock-report-downloader` skill to fetch the `target_year` annual report and save the PDF into `{output_dir}`.
-3. When using `$stock-report-downloader`, reuse its existing CLI or wrapper flow instead of reimplementing the download logic; pass an explicit market hint when needed.
-4. If `$stock-report-downloader` is not applicable, fails, or the target is not A-share / Hong Kong, then fall back to plugins, scripts, or WebSearch to find `{company_name} {target_year} annual report PDF`.
+2. For A-share and Hong Kong stocks, prefer using `$financial-report-downloader` skill to fetch the `target_year` annual report and save the PDF into `{output_dir}`.
+3. When using `$financial-report-downloader`, reuse its existing CLI or wrapper flow instead of reimplementing the download logic; pass an explicit market hint when needed.
+4. If `$financial-report-downloader` is not applicable, fails, or the target is not A-share / Hong Kong, then fall back to plugins, scripts, or WebSearch to find `{company_name} {target_year} annual report PDF`.
 5. If fallback also fails, record the reason and set `pdf_path = null`.
 
 ### Phase 1-2：阶段调度
